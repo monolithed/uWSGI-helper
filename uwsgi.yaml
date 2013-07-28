@@ -1,0 +1,4 @@
+example.com:
+    path    : /usr/local/bin/uwsgi
+    pid     : /var/run/uwsgi/example.com.uwsgi.pid
+    config  : /home/www/example.com/uwsgi.yaml
