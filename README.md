@@ -76,10 +76,15 @@ uwsgi:
 ```
 
 
-*/usr/local/bin/uwsgi*
+*/etc/init.d/uwsgi.py*
 
 ```sh
-alias uwsgi="sudo /usr/local/bin/uwsgi --path='/usr/local/etc/uwsgi/uwsgi.yaml' --name='example.com'"
+
+sudo ln -s /home/www/example.com/uwsgi.py /etc/init.d/uwsgi.py
+
+alias uwsgi="sudo python /etc/init.d/uwsgi.py \
+	--path='/usr/local/etc/uwsgi/uwsgi.yaml' \
+	--name='example.com'"
 
 uwsgi --test
 
