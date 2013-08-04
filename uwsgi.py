@@ -76,7 +76,9 @@ class uWSGI(object):
 	def __parse_config(self, name, file, data=''):
 		try:
 			data = yaml.load(file, Loader=yaml.Loader)
-			self.__log(name, 'syntax is ok')
+
+			if self.options.get('test'):
+				self.__log('the configuration file %s syntax is ok' % name)
 
 		except yaml.YAMLError as error:
 			sys.exit(error)
@@ -90,15 +92,15 @@ class uWSGI(object):
 				return self.__parse_config(name, file)
 
 		except IOError:
-			self.__log(name, 'is not found')
+			self.__log('%s is not found' % name, True)
 
 
-	def __log(self, name, text=''):
-		if self.options.get('test'):
-			print('[uWSGI] the configuration file %s %s' % (name, text))
+	def __log(self, name, exit=''):
+		print('[%s]%s %s' % (self.__class__.__name__,
+			exit and ' error:', name))
 
-		elif not text:
-			print('[uWSGI] %s' % name)
+		if exit:
+			sys.exit(1)
 
 
 	def __params(self):
@@ -106,15 +108,15 @@ class uWSGI(object):
 		data = self.__get_config(path)
 
 		if not data:
-			self.__log('the configuration file %s is not found' % path)
-			sys.exit(1)
+			self.__log('the configuration file %s is not found' %
+				path, True)
 
 		name = self.options.get('name')
 		data = data[name]
 
 		if not data:
-			self.__log('there is no the project settings in file %s' % path)
-			sys.exit(1)
+			self.__log('there is no the project settings in file %s' %
+				path, True)
 
 		return data
 
