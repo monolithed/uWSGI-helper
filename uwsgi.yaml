@@ -1,4 +1,6 @@
-example.com:
+default: &options
     path    : /usr/local/bin/uwsgi
-    pid     : /var/run/uwsgi/example.com.uwsgi.pid
+
+example.com:
+    <<      : *options
     config  : /home/www/example.com/uwsgi.yaml

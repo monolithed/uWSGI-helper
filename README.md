@@ -21,9 +21,12 @@ pip install pyyaml
 ## Example
 
 
-*usr/local/etc/uwsgi/uwsgi.yaml*
+*/usr/local/etc/uwsgi/uwsgi.yaml*
 
 ```yaml
+default: &options
+    path    : /usr/local/bin/uwsgi
+
 example.com:
     path    : /usr/local/bin/uwsgi
     pid     : /var/run/uwsgi/example.com.uwsgi.pid

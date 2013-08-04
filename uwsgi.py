@@ -8,9 +8,13 @@
 -             --path |     --name
 -
 _
-- uwsgi --path='/usr/local/etc/uwsgi/uwsgi.yaml' --name='example.com' --test
+- uwsgi.py --path='/usr/local/etc/uwsgi/uwsgi.yaml' --name='example.com' --test
 -
 - # uwsgi.yaml
+-
+- default: &options
+-     path    : /usr/local/bin/uwsgi
+-
 - example.com:
 -    path    : /usr/local/bin/uwsgi
 -    pid     : /var/run/uwsgi/example.com.uwsgi.pid
@@ -18,7 +22,7 @@ _
 -
 -
 - @author Alexander Guinness <monolithed@gmail.com>
-- @version 0.0.1
+- @version 0.0.2
 - @license: MIT
 - @date: Jul 24 06:53:00 2013
 '''
@@ -29,59 +33,67 @@ import yaml
 import sys
 import os
 import subprocess
+# import time
+
 
 
 class uWSGI(object):
 	def __init__(self, options):
 		self.options = options.__dict__
-		self.uwsgi = self.__data()
-		self.__router()
+		self.params = self.__params()
 
-
-	def __router(self):
-		base = ('name', 'path')
-
-		for key, value in self.options.items():
-			if value and key not in base:
-				return self.__getattribute__(key)()
-
-
-	def __test(method):
-		return lambda self: \
-			self.test() and method(self)
+		self.__run()
 
 
 	def __exec(self, command):
-		return subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+		try:
+			process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+
+			# while process.poll() is None:
+			# 	time.sleep(.2)
+			#
+			# if process.returncode is not 0:
+			# 	self.__log('there was an error starting the server', True)
+
+			output, error = process.communicate()
+
+			return output.decode('utf-8')
+
+		except OSError as error:
+			self.__log('Execution failed: \n%s' % error, True)
 
 
-	def __output(self, command):
-		return subprocess.getoutput(command)
+	def __launch(self, value, text=''):
+		output = self.__exec('%s %s' % (self.params.get('path'), value))
 
-
-	def __launch(self, option, value = '', text = ''):
-		if value:
+		if text:
 			self.__log('%s...' % text)
 
-		self.__exec('%s --%s %s' %
-			(self.uwsgi.get('path'), option, self.uwsgi.get(value, '')))
+		else:
+			self.__log(output)
 
 
-	def __load(self, name, file, data = ''):
+	def __parse_config(self, name, file, data=''):
 		try:
 			data = yaml.load(file, Loader=yaml.Loader)
 			self.__log(name, 'syntax is ok')
 
 		except yaml.YAMLError as error:
-			sys.exit(error);
+			sys.exit(error)
 
-		else:
-			self.__log(name, 'is found')
-
-		return data;
+		return data
 
 
-	def __log(self, name, text = ''):
+	def __get_config(self, name):
+		try:
+			with open(name, 'r', encoding='utf-8') as file:
+				return self.__parse_config(name, file)
+
+		except IOError:
+			self.__log(name, 'is not found')
+
+
+	def __log(self, name, text=''):
 		if self.options.get('test'):
 			print('[uWSGI] the configuration file %s %s' % (name, text))
 
@@ -89,79 +101,97 @@ class uWSGI(object):
 			print('[uWSGI] %s' % name)
 
 
-	def __open(self, name):
-		try:
-			with open(name, 'r', encoding='utf-8') as file:
-				return self.__load(name, file)
-
-		except IOError:
-			self.__log(name, 'is not found')
-
-
-	def __data(self):
+	def __params(self):
 		path = self.options.get('path')
-		data = self.__open(path)
+		data = self.__get_config(path)
 
 		if not data:
 			self.__log('the configuration file %s is not found' % path)
+			sys.exit(1)
 
 		name = self.options.get('name')
 		data = data[name]
 
 		if not data:
 			self.__log('there is no the project settings in file %s' % path)
+			sys.exit(1)
 
 		return data
 
 
-	def name(self):
-		pass
+	def __run(self):
+		base = ('name', 'path')
 
-	def test(self):
-		return self.__open(self.uwsgi.get('config'))
+		for key, value in self.options.items():
+			if value and key not in base:
+				return self.__getattribute__(key)()
 
 
-	@__test
+	def required(self):
+		required = {'path', 'config'}
+
+		result = required <= set(self.params)
+
+		if not result:
+			self.__log('please see required options: \n %s' %
+				required, True)
+
+		return result
+
+
+	def test(method):
+		return lambda self: \
+			self.__get_config(self.params.get('config')) and \
+			self.required() and method(self)
+
+
+	def pid(self):
+		file = self.params.get('config')
+		uwsgi = self.__get_config(file).get('uwsgi')
+
+		if 'pidfile' in uwsgi:
+			return uwsgi.get('pidfile')
+
+		else:
+			self.__log('pidfile is empty: \n %s' % file, True)
+
+
+	@test
 	def start(self):
-		self.__launch('yaml', 'config', 'starting')
+		self.__launch('--yaml %s' %  self.params.get('config'), 'starting')
 
 
-	@__test
+	@test
 	def stop(self):
-		self.__launch('stop', 'pid', 'stopping')
+		self.__launch('--stop %s' % self.pid(), 'stopping')
 
 
-	@__test
+	@test
 	def reload(self):
-		self.__launch('reload', 'pid', 'reloading')
+		self.__launch('--reload %s' % self.pid(), 'reloading')
 
 
 	def info(self):
-		self.__launch('help')
+		self.__launch('--help')
 
 
 	def version(self):
-		return self.__launch('version')
+		self.__launch('--version')
 
 
 	def kill(self):
-		process = self.__exec('killall -%s uwsgi' %
+		output = self.__exec('killall -%s uwsgi' %
 			self.options.get('kill'))
 
-		output, error = process.communicate()
-
 		if not output:
-			file = os.path.basename(self.uwsgi.get('config'))
-			output = self.__output('ps aux | grep %s | grep -v grep' % file)
+			file = os.path.basename(self.params.get('config'))
+			output = self.__exec('ps aux | grep %s | grep -v grep' % file)
 
 			if not output:
 				self.__log('killed')
 
 			else:
 				self.__log('the process is still working!')
-
-		elif error:
-			self.__log('something wrong, please try again!')
 
 
 	def state(self):
@@ -170,15 +200,15 @@ class uWSGI(object):
 				awk "NR == 1 || /uwsgi/" | grep -vE "awk|--info" ;
 			}'''
 
-		output = self.__output(command)
+		output = self.__exec(command)
 		self.__log(output)
 
 
 
-if __name__ ==  '__main__':
+if __name__ == '__main__':
 	import argparse
 
-	parser = argparse.ArgumentParser(description ='UWSGI')
+	parser = argparse.ArgumentParser(description='UWSGI')
 
 	params = [
 		'test', 'stop', 'start', 'reload',
@@ -186,15 +216,15 @@ if __name__ ==  '__main__':
 	]
 
 	for key in params:
-		parser.add_argument('--%s' % key, action = 'store_true')
+		parser.add_argument('--%s' % key, action='store_true')
 
 	parser.add_argument('--kill', help =
 		'A process can be sent POSIX-signals like '
 		'SIGHUP, SIGTERM or SIGKILL: See: <man signal>'
 	)
 
-	parser.add_argument('--path', default = '/opt/local/etc/uwsgi/uwsgi.yaml')
-	parser.add_argument('--name', required = True)
+	parser.add_argument('--path', default='/opt/local/etc/uwsgi/uwsgi.yaml')
+	parser.add_argument('--name', required=True)
 
 	options = parser.parse_args()
 	uWSGI(options)
