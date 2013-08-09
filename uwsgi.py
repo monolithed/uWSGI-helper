@@ -45,32 +45,14 @@ class uWSGI(object):
 		self.__run()
 
 
-	def __exec(self, command):
-		try:
-			process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-
-			# while process.poll() is None:
-			# 	time.sleep(.2)
-			#
-			# if process.returncode is not 0:
-			# 	self.__log('there was an error starting the server', True)
-
-			output, error = process.communicate()
-
-			return output.decode('utf-8')
-
-		except OSError as error:
-			self.__log('Execution failed: \n%s' % error, True)
-
-
 	def __launch(self, value, text=''):
-		output = self.__exec('%s %s' % (self.params.get('path'), value))
+		output = self.exec('%s %s' % (self.params.get('path'), value))
 
 		if text:
-			self.__log('%s...' % text)
+			self.log('%s...' % text)
 
 		else:
-			self.__log(output)
+			self.log(output)
 
 
 	def __parse_config(self, name, file, data=''):
@@ -78,7 +60,7 @@ class uWSGI(object):
 			data = yaml.load(file, Loader=yaml.Loader)
 
 			if self.options.get('test'):
-				self.__log('the configuration file %s syntax is ok' % name)
+				self.log('the configuration file %s syntax is ok' % name)
 
 		except yaml.YAMLError as error:
 			sys.exit(error)
@@ -92,10 +74,10 @@ class uWSGI(object):
 				return self.__parse_config(name, file)
 
 		except IOError:
-			self.__log('%s is not found' % name, True)
+			self.log('%s is not found' % name, True)
 
 
-	def __log(self, name, exit=''):
+	def log(self, name, exit=''):
 		print('[%s]%s %s' % (self.__class__.__name__,
 			exit and ' error:', name))
 
@@ -108,14 +90,14 @@ class uWSGI(object):
 		data = self.__get_config(path)
 
 		if not data:
-			self.__log('the configuration file %s is not found' %
+			self.log('the configuration file %s is not found' %
 				path, True)
 
 		name = self.options.get('name')
 		data = data[name]
 
 		if not data:
-			self.__log('there is no the project settings in file %s' %
+			self.log('there is no the project settings in file %s' %
 				path, True)
 
 		return data
@@ -129,13 +111,31 @@ class uWSGI(object):
 				return self.__getattribute__(key)()
 
 
+	def exec(self, command):
+		try:
+			process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+
+			# while process.poll() is None:
+			# 	time.sleep(.2)
+			#
+			# if process.returncode is not 0:
+			# 	self.log('there was an error starting the server', True)
+
+			output, error = process.communicate()
+
+			return output.decode('utf-8')
+
+		except OSError as error:
+			self.log('Execution failed: \n%s' % error, True)
+
+
 	def required(self):
 		required = {'path', 'config'}
 
 		result = required <= set(self.params)
 
 		if not result:
-			self.__log('please see required options: \n %s' %
+			self.log('please see required options: \n %s' %
 				required, True)
 
 		return result
@@ -155,7 +155,7 @@ class uWSGI(object):
 			return uwsgi.get('pidfile')
 
 		else:
-			self.__log('pidfile is empty: \n %s' % file, True)
+			self.log('pidfile is empty: \n %s' % file, True)
 
 
 	@test
@@ -182,18 +182,18 @@ class uWSGI(object):
 
 
 	def kill(self):
-		output = self.__exec('killall -%s uwsgi' %
+		output = self.exec('killall -%s uwsgi' %
 			self.options.get('kill'))
 
 		if not output:
 			file = os.path.basename(self.params.get('config'))
-			output = self.__exec('ps aux | grep %s | grep -v grep' % file)
+			output = self.exec('ps aux | grep %s | grep -v grep' % file)
 
 			if not output:
-				self.__log('killed')
+				self.log('killed')
 
 			else:
-				self.__log('the process is still working!')
+				self.log('the process is still working!')
 
 
 	def state(self):
@@ -202,8 +202,8 @@ class uWSGI(object):
 				awk "NR == 1 || /uwsgi/" | grep -vE "awk|--info" ;
 			}'''
 
-		output = self.__exec(command)
-		self.__log(output)
+		output = self.exec(command)
+		self.log(output)
 
 
 
