@@ -22,7 +22,7 @@ _
 -
 -
 - @author Alexander Guinness <monolithed@gmail.com>
-- @version 0.0.2
+- @version 0.0.3
 - @license: MIT
 - @date: Jul 24 06:53:00 2013
 '''
@@ -33,6 +33,7 @@ import yaml
 import sys
 import os
 import subprocess
+import ntpath
 # import time
 
 
@@ -94,7 +95,7 @@ class uWSGI(object):
 				path, True)
 
 		name = self.options.get('name')
-		data = data[name]
+		data = data.get(name, None)
 
 		if not data:
 			self.log('there is no the project settings in file %s' %
@@ -113,13 +114,16 @@ class uWSGI(object):
 
 	def exec(self, command):
 		try:
-			process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+			process = subprocess.Popen(command,
+				stdout=subprocess.PIPE, shell=True)
 
 			# while process.poll() is None:
 			# 	time.sleep(.2)
 			#
 			# if process.returncode is not 0:
 			# 	self.log('there was an error starting the server', True)
+
+			# print(process.communicate())
 
 			output, error = process.communicate()
 
@@ -144,10 +148,12 @@ class uWSGI(object):
 	def test(method):
 		return lambda self: \
 			self.__get_config(self.params.get('config')) and \
-			self.required() and method(self)
+			self.set_pid() and \
+			self.required() and \
+			method(self)
 
 
-	def pid(self):
+	def get_pid(self):
 		file = self.params.get('config')
 		uwsgi = self.__get_config(file).get('uwsgi')
 
@@ -155,22 +161,44 @@ class uWSGI(object):
 			return uwsgi.get('pidfile')
 
 		else:
-			self.log('pidfile is empty: \n %s' % file, True)
+			self.log('pid-file is empty: \n %s' %
+				file, True)
+
+
+	def set_pid(self):
+		pid = self.get_pid()
+
+		if not os.path.exists(pid):
+			try:
+				path, file = ntpath.split(pid)
+
+				if not os.path.exists(path):
+					os.makedirs(path)
+
+				open(pid, 'a', encoding='utf-8') \
+					.close()
+
+			except IOError as error:
+				self.log('cannot create a pid-file: \n %s\n\n%s' %
+					(pid, error), True)
+
+		return True
 
 
 	@test
 	def start(self):
-		self.__launch('--yaml %s' %  self.params.get('config'), 'starting')
+		self.__launch('--yaml %s' %
+			self.params.get('config'), 'starting')
 
 
 	@test
 	def stop(self):
-		self.__launch('--stop %s' % self.pid(), 'stopping')
+		self.__launch('--stop %s' % self.get_pid(), 'stopping')
 
 
 	@test
 	def reload(self):
-		self.__launch('--reload %s' % self.pid(), 'reloading')
+		self.__launch('--reload %s' % self.get_pid(), 'reloading')
 
 
 	def info(self):
